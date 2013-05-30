@@ -16,7 +16,7 @@ use URI;
 #use LWP::UserAgent;
 #use LWP::Protocol::https;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 my %errors =  (
 	'_validate_max_file_size' => 'File is too big',
@@ -677,7 +677,6 @@ sub print_response {
 sub handle_request {
 	my $self = shift;
 	my ($print) = @_;
-	$self->_clear;
 	my $method = $self->_get_request_method;
 
 	if($method eq 'GET') {
@@ -701,6 +700,7 @@ sub handle_request {
 	}
 
 	$self->print_response if $print;
+	$self->_clear;
 }
 
 sub generate_output {
@@ -1106,6 +1106,7 @@ sub _save_local {
 		while (my $bytesread = $io_handle->read($buffer,1024)) {
 			print OUTFILE $buffer;
 		}
+		close OUTFILE;
 	}
 }
 
@@ -2381,7 +2382,7 @@ This returns the resulting thumbnail url of the image.
   my $is_image = $j_fu->is_image;
 
 Returns whether or not the uploaded file was an image.
-This should be called after handle_request or in
+This should be called after L</handle_request> or in
 L</post_post>.
 
 =head2 OTHER METHODS
@@ -2570,6 +2571,85 @@ post_get will be called after a get request is handled.
 
 None by default.
 
+=head1 FAQ
+
+=head2 General comments
+
+I (Ron) have made the minimal number of patches to the code for L<jQuery::File::Upload> requried to get it to work.
+
+I have also made a few patches to the POD, on the assumption more-or-less everything applies to this fork of
+the code. This FAQ is my main addition to the POD.
+
+=head2 Version numbers
+
+I (Ron) am using V 8.2.1 of L<https://blueimp.net/>'s L<jQuery|http://jQuery.com> plugin, and V 0.16 of
+Adam Hopkins' Perl module L<jQuery::File::Upload>.
+
+=head2 Handling the file suffixes *.vcf and *.txt
+
+jQuery submits Ajax calls with a file type of 'text/directory' when the file suffix is *.vcf, on the
+assumption it is a L<RFC 2426 - vCard MIME Directory Profile|http://www.faqs.org/rfcs/rfc2426.html>-style file.
+
+Hence, in the config file (or wherever) you specify L</accept_file_types> for the call to new(), be aware you
+need to set L</accept_file_types> to be 'text/directory' when the file suffix is *.vcf.
+
+Alternately, if you upload a file with the *.txt suffix, jQuery uses a file type of 'text/plain'.
+
+Lastly, recall L</accept_file_types> takes an arrayref of strings, not just a string.
+
+=head2 Temporary storage 'v' permanent storage
+
+The code basically assumes you're uploading images with optional thumbnails, which is a very common use case.
+This in turn assumes all files are to be saved permanently on the server.
+
+This does mean that in the call to new() you must specify a value for L</upload_dir> even if you never intend
+to save the file.
+
+I (Ron) use it to upload exports from the address books of email clients. In these cases, the uploaded file is
+processed and then discarded. Permanent storage is not relevant.
+
+Also, in your call to new(), ensure you set C<upload_dir> and C<tmp_dir> to different directories.
+
+One way to handle this is to use File::Temp to generate a dir name for C<tmp_dir>.
+
+	# The EXLOCK option is for BSD-based systems.
+
+	my($dir_name) = File::Temp::newdir('temp.XXXX', CLEANUP => 1, EXLOCK => 0, TMPDIR => 1);
+
+=head2 The code uses $ENV{SCRIPT_URI} but web servers set $ENV{SCRIPT_NAME}
+
+Yes. This is a bug unless there is some web server somewhere which sets $ENV{SCRIPT_URI}.
+
+I (Ron) did not examine this code yet.
+
+=head2 The code assumes you have set script_url
+
+Yes. Just use something suitable in the call to new().
+
+Leaving it unset generates uninitialized warnings.
+
+=head2 The code assumes you have set delete_url
+
+Yes. Just use something harmless in the call to new().
+
+Leaving it unset generates uninitialized warnings.
+
+=head2 Calling sub handle_request() which calls sub _clear()
+
+In L<jQuery::File::Upload>, sub _clear() is called at the start of L</handle_request>, but this zaps
+parameters to new() before they can be used.
+
+In this module, jQuery::File::Upload::Imager, I have moved this call to the end of L</handle_request>.
+
+=head2 Calling sub handle_request() which calls sub _post() which calls sub _save()
+
+In L<jQuery::File::Upload>, the output file handle is not closed, meaning the ouput file contains 0 bytes.
+
+In this module, jQuery::File::Upload::Imager, I call close.
+
+There is commented-out code in sub _save_cloud() which writes to the same file handle.
+I have not examined that code nor have I un-commented it.
+
 =head1 Catalyst Performance - Persistent jQuery::File::Upload::Imager
 
 A jQuery::File::Upload::Imager object shouldn't be too expensive to create, however
@@ -2585,7 +2665,7 @@ with values of the jQuery::File::Upload::Imager object that were not cleared
 messing with the current request. The _clear method is called before
 every L</handle_request> which clears the values of
 the jQuery::File::Upload::Imager object, but it's possible I may have
-missed something.
+missed something. You did! See the L</FAQ>.
 
 =head1 SEE ALSO
 
@@ -2634,7 +2714,7 @@ L<jQuery File Upload|https://github.com/blueimp/jQuery-File-Upload/>
 Adam Hopkins, E<lt>srchulo@cpan.org<gt>
 
 Ron Savage I<E<lt>ron@savage.net.auE<gt>> has patched jQuery::File::Upload V 0.16
-to use L<Imager> rather than L<Image::Magick>, on 2013-05-23.
+to use L<Imager> rather than L<Image::Magick>, on 2013-05-23. See the L</FAQ> for details.
 
 =head1 Bugs
 
